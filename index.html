@@ -311,7 +311,7 @@ function viewDashboard(){
 
     <div class="section-title"><h2>Goals due soon</h2><button class="link-btn" onclick="go('goals')">View all</button></div>
     <div class="card">
-      ${DATA.goals.length? DATA.goals.slice(0,3).map(g=>goalRow(g)).join('') : emptyRow('No goals yet')}
+      ${goalsSortedByDue().length? goalsSortedByDue().slice(0,4).map(g=>goalRow(g)).join('') : emptyRow('No goals yet')}
     </div>
   `;
 }
@@ -330,18 +330,51 @@ function categoryIcon(cat){
   const map={'Food & Groceries':'🍎','Transport':'🚌','Shopping':'🛍️','Bills & Utilities':'💡','Health':'❤️','Entertainment':'🎬','Education':'🎓','EMI / Loan':'🏦','Money Given to Others':'🤝','Salary':'💰','Freelance / Business':'💼','Interest / Returns':'📈'};
   return map[cat]||'•';
 }
+
+/* ---- Goal due-date helpers ---- */
+function nextGoalDueDate(monthName){
+  const idx = monthNames.indexOf(monthName);
+  if(idx<0) return null;
+  const now = new Date(); now.setHours(0,0,0,0);
+  let due = new Date(now.getFullYear(), idx, 1);
+  if(due < now){ due = new Date(now.getFullYear()+1, idx, 1); }
+  return due;
+}
+function daysUntil(date){
+  const now = new Date(); now.setHours(0,0,0,0);
+  return Math.round((date - now) / (1000*60*60*24));
+}
+function goalDueInfo(g){
+  let soonest=null;
+  (g.targetMonths||[]).forEach(m=>{
+    const d = nextGoalDueDate(m);
+    if(d && (soonest===null || d<soonest)) soonest=d;
+  });
+  if(!soonest) return {days:null};
+  return {date:soonest, days:daysUntil(soonest)};
+}
+function goalsSortedByDue(){
+  return [...DATA.goals].sort((a,b)=>{
+    const da=goalDueInfo(a).days, db=goalDueInfo(b).days;
+    if(da===null) return 1; if(db===null) return -1;
+    return da-db;
+  });
+}
 function goalRow(g){
-  const pct = Math.min(100, Math.round((g.saved/(g.monthly*12||1))*100)) || Math.min(100, Math.round((g.saved / (g.targetAmount||g.monthly*targetMonthsFactor(g)))*100));
-  return `<div class="row" style="display:block;">
+  const pct = Math.min(100, Math.round((g.saved/(g.monthly*12||1))*100));
+  const info = goalDueInfo(g);
+  const urgent = info.days!==null && info.days<=15;
+  const dueLabel = info.days===null ? (g.targetMonths||[]).join(', ')
+    : (info.days<0 ? 'Overdue' : info.days===0 ? 'Due today' : `Due in ${info.days}d`);
+  return `<div class="row" style="display:block;cursor:pointer" onclick="go('goals')">
     <div style="display:flex;justify-content:space-between;">
       <div class="title">${g.name}</div>
-      <div class="meta">${g.targetMonths.join(', ')}</div>
+      <span class="pill ${urgent?'red':'gray'}">${dueLabel}</span>
     </div>
-    <div class="meta">${rupee(g.saved)} saved of ${rupee(g.monthly)}/mo</div>
+    <div class="meta">${rupee(g.saved)} saved · target ${rupee(g.monthly)}/mo · ${(g.targetMonths||[]).join(', ')}</div>
     <div class="progress"><div style="width:${Math.min(100,pct)}%"></div></div>
   </div>`;
 }
-function targetMonthsFactor(g){ return Math.max(1,g.targetMonths.length); }
 
 /* ============ ACCOUNTS ============ */
 function viewAccounts(){
@@ -475,20 +508,27 @@ function applyBalanceEffect(rec, old){
 
 /* ============ GOALS ============ */
 function viewGoals(){
+  const list = goalsSortedByDue();
   return `
     <h1 class="page-title">Goals & Future Funds</h1>
-    <p class="subtle">Save a fixed amount every month into SBI Kunigal, then use it when it's due.</p>
+    <p class="subtle">Save toward SBI Kunigal each month — log whatever you actually manage to save, then use it when it's due.</p>
     <div class="card">
-      ${DATA.goals.length? DATA.goals.map(g=>`
+      ${list.length? list.map(g=>{
+        const info = goalDueInfo(g);
+        const urgent = info.days!==null && info.days<=15;
+        const dueLabel = info.days===null ? (g.targetMonths||[]).join(', ')
+          : (info.days<0 ? 'Overdue' : info.days===0 ? 'Due today' : `Due in ${info.days}d`);
+        return `
         <div class="row" style="display:block;cursor:pointer" onclick="editGoal('${g.id}')">
           <div style="display:flex;justify-content:space-between;">
             <div class="title">${g.name}</div>
-            <span class="pill green">${g.targetMonths.join(', ')}</span>
+            <span class="pill ${urgent?'red':'green'}">${dueLabel}</span>
           </div>
-          <div class="meta">${rupee(g.saved)} saved · ${rupee(g.monthly)}/month → ${g.account}</div>
+          <div class="meta">${rupee(g.saved)} saved · target ${rupee(g.monthly)}/month → ${g.account}</div>
           ${g.notes?`<div class="meta">📝 ${g.notes}</div>`:''}
-          <div class="progress"><div style="width:${Math.min(100,Math.round((g.saved/(g.monthly*12))*100))}%"></div></div>
-        </div>`).join('') : emptyRow('No goals yet')}
+          <div class="progress"><div style="width:${Math.min(100,Math.round((g.saved/(g.monthly*12||1))*100))}%"></div></div>
+        </div>`;
+      }).join('') : emptyRow('No goals yet')}
     </div>
     <button class="btn secondary" onclick="editGoal(null)">+ Add goal</button>
   `;
@@ -498,36 +538,63 @@ function editGoal(id){
   openSheet(`
     <div class="sheet-title">${id?'Edit':'Add'} goal</div>
     <label>Goal name</label><input id="f_name" value="${g.name}" placeholder="e.g. SBI Premium, School Fee">
-    <label>Save this much every month (₹)</label><input id="f_monthly" type="number" value="${g.monthly}">
-    <label>Use / due month(s) — comma separated</label><input id="f_months" value="${g.targetMonths.join(', ')}" placeholder="e.g. Aug, Feb">
-    <label>Saved so far (₹)</label><input id="f_saved" type="number" value="${g.saved}">
+    <label>Recommended saving per month (₹)</label><input id="f_monthly" type="number" value="${g.monthly}">
+    <label>Use / due month(s) — comma separated</label><input id="f_months" value="${(g.targetMonths||[]).join(', ')}" placeholder="e.g. Aug, Feb">
     <label>Savings account</label>
     <select id="f_account">${DATA.accounts.map(a=>`<option ${a.name===g.account?'selected':''}>${a.name}</option>`).join('')}</select>
     <label>Notes / comments</label><textarea id="f_notes" rows="2" placeholder="Anything you want to remember about this goal">${g.notes||''}</textarea>
+    ${id? `
+      <label>Saved so far (₹)</label>
+      <div class="kv" style="background:var(--green-light);border-radius:10px;padding:10px 12px;font-weight:700;color:var(--green-deep)">
+        <div>Current total</div><div>${rupee(g.saved)}</div>
+      </div>
+      <p class="subtle" style="margin-bottom:0">This updates only when you log a saving below — it's not directly editable, so it always matches what you actually put aside.</p>
+    ` : ''}
     <div class="btn-row">
       ${id?`<button class="btn ghost" onclick="deleteItem('goals','${id}')">Delete</button>`:''}
       <button class="btn" onclick="saveGoal('${id||''}')">Save</button>
     </div>
-    ${id?`<button class="btn secondary" onclick="addGoalContribution('${id}')">+ Log this month's saving</button>`:''}
+    ${id?`<button class="btn secondary" onclick="openLogSaving('${id}')">+ Log a saving</button>`:''}
   `);
 }
 function saveGoal(id){
+  const existing = id ? DATA.goals.find(x=>x.id===id) : null;
   const rec = {
     id:id||uid(), name:val('f_name'), monthly:Number(val('f_monthly')||0),
     targetMonths: val('f_months').split(',').map(s=>s.trim()).filter(Boolean),
-    saved:Number(val('f_saved')||0), account:val('f_account'), notes:val('f_notes')
+    saved: existing ? existing.saved : 0, account:val('f_account'), notes:val('f_notes')
   };
   upsert('goals', rec);
   closeSheet(); go('goals'); syncPush('Goals', rec, !!id);
 }
+function openLogSaving(id){
+  const g = DATA.goals.find(x=>x.id===id);
+  openSheet(`
+    <div class="sheet-title">Log a saving — ${g.name}</div>
+    <p class="subtle">Recommended is ${rupee(g.monthly)}, but enter whatever you actually managed to save this time — more or less is fine.</p>
+    <label>Amount saved (₹)</label><input id="f_logamount" type="number" value="${g.monthly}">
+    <label>Date</label><input id="f_logdate" type="date" value="${todayISO()}">
+    <label>Notes (optional)</label><input id="f_lognote" placeholder="e.g. saved less this month">
+    <button class="btn" onclick="addGoalContribution('${id}')">Save this entry</button>
+  `);
+}
 function addGoalContribution(id){
   const g = DATA.goals.find(x=>x.id===id);
-  g.saved = Number(g.saved) + Number(g.monthly);
+  const amount = Number(val('f_logamount')||0);
+  if(!amount){ toast('Enter an amount first'); return; }
+  g.saved = Number(g.saved) + amount;
   const acc = DATA.accounts.find(a=>a.name===g.account);
-  if(acc) acc.balance -= Number(g.monthly);
+  if(acc) acc.balance -= amount;
+  // also record it as a transaction so it shows in history
+  const txRec = {
+    id:uid(), type:'Expense', amount, category:'Goal Saving: '+g.name,
+    account:g.account, note: val('f_lognote') || ('Saved toward '+g.name), date: val('f_logdate')||todayISO()
+  };
+  DATA.transactions.push(txRec);
   saveLocal(); closeSheet(); go('goals');
-  toast('Logged this month\'s saving for '+g.name);
+  toast('Logged '+rupee(amount)+' toward '+g.name);
   syncPush('Goals', g, true);
+  syncPush('Transactions', txRec, false);
 }
 
 /* ============ INVESTMENTS ============ */

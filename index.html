@@ -409,11 +409,12 @@ function markRecurringPaid(id){
     account:r.account, note:'Paid: '+r.name, date:todayISO()
   };
   DATA.transactions.push(txRec);
-  applyBalanceEffect(txRec, null);
+  const affected = applyBalanceEffect(txRec, null);
   r.lastPaid = monthKeyNow;
   saveLocal(); closeSheet(); render();
   toast('Marked '+r.name+' as paid');
   syncPush('Transactions', txRec, false);
+  affected.forEach(acc=>syncPush('Accounts', acc, true));
   syncPush('Recurring', r, true);
 }
 function goalRow(g){
@@ -572,24 +573,27 @@ function saveTransaction(id){
   }
   const old = id ? DATA.transactions.find(x=>x.id===id) : null;
   upsert('transactions', rec);
-  applyBalanceEffect(rec, old);
-  closeSheet(); go('transactions'); syncPush('Transactions', rec, !!id);
+  const affected = applyBalanceEffect(rec, old);
+  closeSheet(); go('transactions');
+  syncPush('Transactions', rec, !!id);
+  affected.forEach(acc=>syncPush('Accounts', acc, true));
 }
 function applyBalanceEffect(rec, old){
-  // revert old effect first
-  if(old) revertOrApply(old, -1);
-  revertOrApply(rec, 1);
+  const affected = new Set();
+  if(old) revertOrApply(old, -1, affected);
+  revertOrApply(rec, 1, affected);
   saveLocal();
+  return [...affected];
 }
-function revertOrApply(rec, sign){
+function revertOrApply(rec, sign, affectedSet){
   if(rec.type==='Transfer'){
     const from = DATA.accounts.find(a=>a.name===rec.fromAccount);
     const to = DATA.accounts.find(a=>a.name===rec.toAccount);
-    if(from) from.balance -= sign*Number(rec.amount);
-    if(to) to.balance += sign*Number(rec.amount);
+    if(from){ from.balance -= sign*Number(rec.amount); if(affectedSet) affectedSet.add(from); }
+    if(to){ to.balance += sign*Number(rec.amount); if(affectedSet) affectedSet.add(to); }
   } else {
     const acc = DATA.accounts.find(a=>a.name===rec.account);
-    if(acc) acc.balance += sign*(rec.type==='Expense'? -Number(rec.amount): Number(rec.amount));
+    if(acc){ acc.balance += sign*(rec.type==='Expense'? -Number(rec.amount): Number(rec.amount)); if(affectedSet) affectedSet.add(acc); }
   }
 }
 
@@ -939,8 +943,20 @@ function upsert(collection, rec){
   saveLocal();
 }
 function deleteItem(collection, id){
-  DATA[collection] = DATA[collection].filter(x=>x.id!==id);
-  saveLocal(); closeSheet(); render();
+  if(collection==='transactions'){
+    const rec = DATA.transactions.find(x=>x.id===id);
+    DATA.transactions = DATA.transactions.filter(x=>x.id!==id);
+    if(rec){
+      const affected = new Set();
+      revertOrApply(rec, -1, affected);
+      saveLocal();
+      affected.forEach(acc=>syncPush('Accounts', acc, true));
+    }
+  } else {
+    DATA[collection] = DATA[collection].filter(x=>x.id!==id);
+    saveLocal();
+  }
+  closeSheet(); render();
   syncDelete(collection, id);
 }
 

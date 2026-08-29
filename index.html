@@ -708,13 +708,15 @@ function viewMore(){
     </div>
     <div class="section-title"><h2>Google Sheets sync</h2></div>
     <div class="card">
-      <p class="subtle" style="margin-top:0">Paste your Apps Script Web App URL to sync all data to your own Google Sheet in real time.</p>
+      <p class="subtle" style="margin-top:0">Your Google Sheet is the master copy. "Sync now" pulls the latest from your Sheet — any edits you made directly in Sheets (including deletions) will be reflected here.</p>
       <input id="f_scripturl" value="${DATA.settings.scriptUrl||''}" placeholder="https://script.google.com/macros/s/.../exec">
       <div class="btn-row">
         <button class="btn ghost" onclick="saveScriptUrl()">Save URL</button>
-        <button class="btn" onclick="fullSync()">Sync now</button>
+        <button class="btn" onclick="fullSync()">Sync now (pull)</button>
       </div>
       <p class="subtle">Last synced: ${DATA.settings.lastSync||'never'}</p>
+      <button class="btn secondary" onclick="pushLocalToSheet()">Push local data to Sheet (first-time setup only)</button>
+      <p class="subtle" style="margin-bottom:0">Only use "Push" once, when connecting a brand-new Sheet that doesn't have your data yet. After that, always add/edit inside the app or the Sheet — don't use Push again, or it will re-add anything you deleted from the Sheet.</p>
     </div>
     <div class="section-title"><h2>Data</h2></div>
     <div class="card">
@@ -864,37 +866,46 @@ async function fullSync(){
   if(!url){ toast('Paste your Apps Script URL first'); return; }
   DATA.settings.scriptUrl = url; saveLocal();
   toast('Syncing…');
+  await pullFromSheet(url, true);
+}
+async function pullFromSheet(url, showToast){
   try{
-    // Push everything up
+    const res = await fetch(url);
+    const remote = await res.json();
+    // The Sheet is the source of truth: always mirror it exactly, even if a tab is now empty.
+    Object.entries(SHEET_MAP).forEach(([key,sheetName])=>{
+      const rows = remote[sheetName] || [];
+      DATA[key] = key==='goals' ? rows.map(deserializeGoal) : rows;
+    });
+    DATA.settings.lastSync = new Date().toLocaleString('en-IN');
+    saveLocal(); setSyncDot('ok');
+    if(showToast) toast('Synced with Google Sheets');
+    render();
+  }catch(e){
+    setSyncDot('err');
+    if(showToast) toast('Sync failed — check the URL and try again');
+  }
+}
+async function pushLocalToSheet(){
+  const url = val('f_scripturl') || DATA.settings.scriptUrl;
+  if(!url){ toast('Paste your Apps Script URL first'); return; }
+  DATA.settings.scriptUrl = url; saveLocal();
+  toast('Pushing your local data up…');
+  try{
     for(const [key, sheetName] of Object.entries(SHEET_MAP)){
       for(const rec of DATA[key]){
         await fetch(url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({sheet:sheetName, action:'upsert', data:serializeForSheet(rec)})});
       }
     }
-    // Pull latest back down
-    const res = await fetch(url);
-    const remote = await res.json();
-    Object.entries(SHEET_MAP).forEach(([key,sheetName])=>{
-      if(remote[sheetName]) DATA[key] = key==='goals' ? remote[sheetName].map(deserializeGoal) : remote[sheetName];
-    });
-    DATA.settings.lastSync = new Date().toLocaleString('en-IN');
-    saveLocal(); setSyncDot('ok'); toast('Synced with Google Sheets');
-    render();
+    setSyncDot('ok'); toast('Pushed. Now tap "Sync now" to confirm.');
   }catch(e){
-    setSyncDot('err'); toast('Sync failed — check the URL and try again');
+    setSyncDot('err'); toast('Push failed — check the URL and try again');
   }
 }
 async function autoPull(){
   const url = DATA.settings.scriptUrl;
   if(!url) return;
-  try{
-    const res = await fetch(url);
-    const remote = await res.json();
-    Object.entries(SHEET_MAP).forEach(([key,sheetName])=>{
-      if(remote[sheetName] && remote[sheetName].length) DATA[key] = key==='goals' ? remote[sheetName].map(deserializeGoal) : remote[sheetName];
-    });
-    saveLocal(); setSyncDot('ok'); render();
-  }catch(e){ setSyncDot('err'); }
+  await pullFromSheet(url, false);
 }
 
 /* ============ INIT ============ */

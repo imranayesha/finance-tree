@@ -214,7 +214,7 @@ function seedData(){
     ],
     given:[],
     recurring:[
-      {id:uid(), name:'Home Loan EMI', amount:0, day:5, account:'SBI Bangalore (Salary)', type:'EMI', notes:''}
+      {id:uid(), name:'Home Loan EMI', amount:0, day:5, account:'SBI Bangalore (Salary)', category:'EMI / Loan', notes:'', lastPaid:''}
     ],
     categories: DEFAULT_CATEGORIES,
     settings:{scriptUrl:'', lastSync:''}
@@ -313,16 +313,36 @@ function viewDashboard(){
     <div class="card">
       ${goalsSortedByDue().length? goalsSortedByDue().slice(0,4).map(g=>goalRow(g)).join('') : emptyRow('No goals yet')}
     </div>
+
+    <div class="section-title"><h2>Upcoming bills</h2><button class="link-btn" onclick="openRecurring()">Manage</button></div>
+    <div class="card">
+      ${DATA.recurring.length? recurringSortedByDue().slice(0,4).map(billRow).join('') : emptyRow('No recurring bills added — tap Manage to add one')}
+    </div>
   `;
+}
+function billRow(r){
+  const info = recurringDueInfo(r);
+  const urgent = info.days<=15;
+  const dueLabel = info.days<0 ? 'Overdue' : info.days===0 ? 'Due today' : `Due in ${info.days}d`;
+  return `<div class="row" style="cursor:pointer" onclick="openRecurring()">
+    <div class="left"><div class="swatch" style="background:var(--green-light)">🔁</div>
+      <div><div class="title">${r.name}</div><div class="meta">${r.account} · day ${r.day}</div></div>
+    </div>
+    <div style="text-align:right">
+      <div class="amt">${rupee(r.amount)}</div>
+      <span class="pill ${urgent?'red':'gray'}">${dueLabel}</span>
+    </div>
+  </div>`;
 }
 function emptyRow(msg){ return `<div class="empty subtle">${msg}</div>`; }
 function txRow(t){
   const neg = t.type==='Expense'||t.type==='Given';
+  const who = t.type==='Transfer' ? `${t.fromAccount} → ${t.toAccount}` : (t.account||'');
   return `<div class="row">
-    <div class="left"><div class="swatch" style="background:var(--green-light)">${categoryIcon(t.category)}</div>
-      <div><div class="title">${t.category||t.type}</div><div class="meta">${t.note||t.account||''} · ${fmtDate(t.date)}</div></div>
+    <div class="left"><div class="swatch" style="background:var(--green-light)">${t.type==='Transfer'?'🔁':categoryIcon(t.category)}</div>
+      <div><div class="title">${t.type==='Transfer'?(t.category||'Transfer'):(t.category||t.type)}</div><div class="meta">${who}${t.note?' · '+t.note:''} · ${fmtDate(t.date)}</div></div>
     </div>
-    <div class="amt ${neg?'neg':'pos'}">${neg?'-':'+'}${rupee(t.amount)}</div>
+    <div class="amt ${neg?'neg':(t.type==='Transfer'?'':'pos')}">${neg?'-':(t.type==='Transfer'?'':'+')}${rupee(t.amount)}</div>
   </div>`;
 }
 function fmtDate(d){ if(!d) return ''; const parts=d.split('-'); return parts.length===3? `${parts[2]} ${monthNames[+parts[1]-1]}` : d; }
@@ -359,6 +379,42 @@ function goalsSortedByDue(){
     if(da===null) return 1; if(db===null) return -1;
     return da-db;
   });
+}
+
+/* ---- Recurring bill/EMI due-date helpers ---- */
+function nextRecurringDueDate(r){
+  const now = new Date(); now.setHours(0,0,0,0);
+  const monthKeyNow = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  let due = new Date(now.getFullYear(), now.getMonth(), Number(r.day)||1);
+  const alreadyPaidThisMonth = r.lastPaid === monthKeyNow;
+  if(due < now || alreadyPaidThisMonth){
+    due = new Date(now.getFullYear(), now.getMonth()+1, Number(r.day)||1);
+  }
+  return due;
+}
+function recurringDueInfo(r){
+  const d = nextRecurringDueDate(r);
+  return {date:d, days:daysUntil(d)};
+}
+function recurringSortedByDue(){
+  return [...DATA.recurring].sort((a,b)=>recurringDueInfo(a).days - recurringDueInfo(b).days);
+}
+function markRecurringPaid(id){
+  const r = DATA.recurring.find(x=>x.id===id);
+  if(!r) return;
+  const now = new Date();
+  const monthKeyNow = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const txRec = {
+    id:uid(), type:'Expense', amount:Number(r.amount)||0, category:r.category||'Bills & Utilities',
+    account:r.account, note:'Paid: '+r.name, date:todayISO()
+  };
+  DATA.transactions.push(txRec);
+  applyBalanceEffect(txRec, null);
+  r.lastPaid = monthKeyNow;
+  saveLocal(); closeSheet(); render();
+  toast('Marked '+r.name+' as paid');
+  syncPush('Transactions', txRec, false);
+  syncPush('Recurring', r, true);
 }
 function goalRow(g){
   const pct = Math.min(100, Math.round((g.saved/(g.monthly*12||1))*100));
@@ -438,11 +494,12 @@ function viewTransactions(){
 function setTxFilter(f){ txFilter=f; render(); }
 function txRowEditable(t){
   const neg = t.type==='Expense';
+  const who = t.type==='Transfer' ? `${t.fromAccount} → ${t.toAccount}` : (t.account||'');
   return `<div class="row" onclick="editTransaction('${t.id}')" style="cursor:pointer">
-    <div class="left"><div class="swatch" style="background:var(--green-light)">${categoryIcon(t.category)}</div>
-      <div><div class="title">${t.category||t.type}</div><div class="meta">${t.note||''} ${t.account?('· '+t.account):''} · ${fmtDate(t.date)}</div></div>
+    <div class="left"><div class="swatch" style="background:var(--green-light)">${t.type==='Transfer'?'🔁':categoryIcon(t.category)}</div>
+      <div><div class="title">${t.type==='Transfer'? (t.category||'Transfer') : (t.category||t.type)}</div><div class="meta">${t.note?t.note+' · ':''}${who} · ${fmtDate(t.date)}</div></div>
     </div>
-    <div class="amt ${neg?'neg':'pos'}">${neg?'-':'+'}${rupee(t.amount)}</div>
+    <div class="amt ${neg?'neg':(t.type==='Transfer'?'':'pos')}">${neg?'-':(t.type==='Transfer'?'':'+')}${rupee(t.amount)}</div>
   </div>`;
 }
 
@@ -457,11 +514,18 @@ function openAddSheet(prefill){
       ${['Expense','Income','Transfer'].map(t=>`<button class="${addType===t?'active':''}" onclick="setAddType('${t}')">${t}</button>`).join('')}
     </div>
     <label>Amount (₹)</label><input id="f_amount" type="number" placeholder="0">
-    <label>Category</label>
-    <select id="f_category">${cats.map(c=>`<option>${c}</option>`).join('')}</select>
-    <label>Account</label>
-    <select id="f_account">${DATA.accounts.map(a=>`<option>${a.name}</option>`).join('')}</select>
-    <label>To whom / note (optional)</label><input id="f_note" placeholder="e.g. Ramesh, medical, groceries">
+    ${addType==='Transfer' ? `
+      <label>From account</label>
+      <select id="f_fromaccount">${DATA.accounts.map(a=>`<option>${a.name}</option>`).join('')}</select>
+      <label>To account</label>
+      <select id="f_toaccount">${DATA.accounts.map((a,i)=>`<option ${i===1?'selected':''}>${a.name}</option>`).join('')}</select>
+    ` : `
+      <label>Category</label>
+      <select id="f_category">${cats.map(c=>`<option>${c}</option>`).join('')}</select>
+      <label>Account</label>
+      <select id="f_account">${DATA.accounts.map(a=>`<option>${a.name}</option>`).join('')}</select>
+    `}
+    <label>${addType==='Transfer'?'Note (optional)':'To whom / note (optional)'}</label><input id="f_note" placeholder="e.g. Ramesh, medical, groceries">
     <label>Date</label><input id="f_date" type="date" value="${todayISO()}">
     <button class="btn" onclick="saveTransaction()">Save transaction</button>
   `);
@@ -474,8 +538,15 @@ function editTransaction(id){
   openSheet(`
     <div class="sheet-title">Edit transaction</div>
     <label>Amount (₹)</label><input id="f_amount" type="number" value="${t.amount}">
-    <label>Category</label><select id="f_category">${cats.map(c=>`<option ${c===t.category?'selected':''}>${c}</option>`).join('')}</select>
-    <label>Account</label><select id="f_account">${DATA.accounts.map(a=>`<option ${a.name===t.account?'selected':''}>${a.name}</option>`).join('')}</select>
+    ${addType==='Transfer' ? `
+      <label>From account</label>
+      <select id="f_fromaccount">${DATA.accounts.map(a=>`<option ${a.name===t.fromAccount?'selected':''}>${a.name}</option>`).join('')}</select>
+      <label>To account</label>
+      <select id="f_toaccount">${DATA.accounts.map(a=>`<option ${a.name===t.toAccount?'selected':''}>${a.name}</option>`).join('')}</select>
+    ` : `
+      <label>Category</label><select id="f_category">${cats.map(c=>`<option ${c===t.category?'selected':''}>${c}</option>`).join('')}</select>
+      <label>Account</label><select id="f_account">${DATA.accounts.map(a=>`<option ${a.name===t.account?'selected':''}>${a.name}</option>`).join('')}</select>
+    `}
     <label>To whom / note</label><input id="f_note" value="${t.note||''}">
     <label>Date</label><input id="f_date" type="date" value="${t.date}">
     <div class="btn-row">
@@ -486,24 +557,40 @@ function editTransaction(id){
 }
 function saveTransaction(id){
   const amount = Number(val('f_amount')||0);
-  const rec = {
-    id:id||uid(), type:addType, amount, category:val('f_category'),
-    account:val('f_account'), note:val('f_note'), date:val('f_date')
-  };
+  let rec;
+  if(addType==='Transfer'){
+    rec = {
+      id:id||uid(), type:'Transfer', amount, category:'Transfer',
+      fromAccount:val('f_fromaccount'), toAccount:val('f_toaccount'),
+      note:val('f_note'), date:val('f_date')
+    };
+  } else {
+    rec = {
+      id:id||uid(), type:addType, amount, category:val('f_category'),
+      account:val('f_account'), note:val('f_note'), date:val('f_date')
+    };
+  }
   const old = id ? DATA.transactions.find(x=>x.id===id) : null;
   upsert('transactions', rec);
   applyBalanceEffect(rec, old);
   closeSheet(); go('transactions'); syncPush('Transactions', rec, !!id);
 }
 function applyBalanceEffect(rec, old){
-  // revert old effect
-  if(old){
-    const acc = DATA.accounts.find(a=>a.name===old.account);
-    if(acc){ acc.balance += (old.type==='Expense'? Number(old.amount): -Number(old.amount)); }
-  }
-  const acc = DATA.accounts.find(a=>a.name===rec.account);
-  if(acc){ acc.balance += (rec.type==='Expense'? -Number(rec.amount): Number(rec.amount)); }
+  // revert old effect first
+  if(old) revertOrApply(old, -1);
+  revertOrApply(rec, 1);
   saveLocal();
+}
+function revertOrApply(rec, sign){
+  if(rec.type==='Transfer'){
+    const from = DATA.accounts.find(a=>a.name===rec.fromAccount);
+    const to = DATA.accounts.find(a=>a.name===rec.toAccount);
+    if(from) from.balance -= sign*Number(rec.amount);
+    if(to) to.balance += sign*Number(rec.amount);
+  } else {
+    const acc = DATA.accounts.find(a=>a.name===rec.account);
+    if(acc) acc.balance += sign*(rec.type==='Expense'? -Number(rec.amount): Number(rec.amount));
+  }
 }
 
 /* ============ GOALS ============ */
@@ -569,10 +656,18 @@ function saveGoal(id){
 }
 function openLogSaving(id){
   const g = DATA.goals.find(x=>x.id===id);
+  const otherAccounts = DATA.accounts.filter(a=>a.name!==g.account);
+  const defaultFrom = otherAccounts.find(a=>/salary/i.test(a.name)) || otherAccounts[0];
   openSheet(`
     <div class="sheet-title">Log a saving — ${g.name}</div>
     <p class="subtle">Recommended is ${rupee(g.monthly)}, but enter whatever you actually managed to save this time — more or less is fine.</p>
     <label>Amount saved (₹)</label><input id="f_logamount" type="number" value="${g.monthly}">
+    <label>From account</label>
+    <select id="f_logfrom">
+      ${otherAccounts.map(a=>`<option ${a.name===(defaultFrom&&defaultFrom.name)?'selected':''}>${a.name}</option>`).join('')}
+      <option value="__external__">External / new money (don't deduct from any account)</option>
+    </select>
+    <p class="subtle" style="margin:4px 0 0">This moves money from that account into ${g.account} — your net worth stays the same, since it's still your money, just repositioned.</p>
     <label>Date</label><input id="f_logdate" type="date" value="${todayISO()}">
     <label>Notes (optional)</label><input id="f_lognote" placeholder="e.g. saved less this month">
     <button class="btn" onclick="addGoalContribution('${id}')">Save this entry</button>
@@ -582,18 +677,30 @@ function addGoalContribution(id){
   const g = DATA.goals.find(x=>x.id===id);
   const amount = Number(val('f_logamount')||0);
   if(!amount){ toast('Enter an amount first'); return; }
+  const fromName = val('f_logfrom');
+
   g.saved = Number(g.saved) + amount;
-  const acc = DATA.accounts.find(a=>a.name===g.account);
-  if(acc) acc.balance -= amount;
-  // also record it as a transaction so it shows in history
+  const toAcc = DATA.accounts.find(a=>a.name===g.account);
+  if(toAcc) toAcc.balance += amount;                 // money arrives in the goal's savings account
+
+  let fromAcc = null;
+  if(fromName && fromName !== '__external__'){
+    fromAcc = DATA.accounts.find(a=>a.name===fromName);
+    if(fromAcc) fromAcc.balance -= amount;            // money leaves the source account
+  }
+
+  // record it as a transaction so it shows in history
   const txRec = {
-    id:uid(), type:'Expense', amount, category:'Goal Saving: '+g.name,
-    account:g.account, note: val('f_lognote') || ('Saved toward '+g.name), date: val('f_logdate')||todayISO()
+    id:uid(), type:'Transfer', amount, category:'Goal Saving: '+g.name,
+    fromAccount: fromAcc ? fromAcc.name : 'External / new money', toAccount: g.account,
+    note: val('f_lognote') || ('Saved toward '+g.name), date: val('f_logdate')||todayISO()
   };
   DATA.transactions.push(txRec);
   saveLocal(); closeSheet(); go('goals');
   toast('Logged '+rupee(amount)+' toward '+g.name);
   syncPush('Goals', g, true);
+  if(toAcc) syncPush('Accounts', toAcc, true);
+  if(fromAcc) syncPush('Accounts', fromAcc, true);
   syncPush('Transactions', txRec, false);
 }
 
@@ -725,30 +832,60 @@ function viewMore(){
   `;
 }
 function openRecurring(){
+  const list = recurringSortedByDue();
   openSheet(`
-    <div class="sheet-title">Recurring payments / EMIs</div>
-    <p class="subtle">Track loan EMIs and other fixed monthly payments here as a reminder — log them as an Expense transaction when paid.</p>
-    ${DATA.recurring.map(r=>`
-      <div class="row"><div class="left"><div class="swatch" style="background:var(--green-light)">🔁</div>
-        <div><div class="title">${r.name}</div><div class="meta">Day ${r.day} of month · ${r.account}</div></div></div>
-        <div class="amt">${rupee(r.amount)}</div>
-      </div>`).join('') || emptyRow('None yet')}
-    <button class="btn secondary" onclick="editRecurring()">+ Add recurring payment</button>
+    <div class="sheet-title">Recurring bills / EMIs</div>
+    <p class="subtle">Fixed monthly payments — see when each is due, and mark it paid once it's gone out.</p>
+    ${list.length? list.map(r=>{
+      const info = recurringDueInfo(r);
+      const urgent = info.days<=15;
+      const dueLabel = info.days<0 ? 'Overdue' : info.days===0 ? 'Due today' : `Due in ${info.days}d`;
+      return `
+      <div class="row" style="display:block;cursor:pointer" onclick="editRecurring('${r.id}')">
+        <div style="display:flex;justify-content:space-between;">
+          <div class="title">${r.name}</div>
+          <span class="pill ${urgent?'red':'green'}">${dueLabel}</span>
+        </div>
+        <div class="meta">${rupee(r.amount)} · day ${r.day} of month · ${r.account}</div>
+        ${r.notes?`<div class="meta">📝 ${r.notes}</div>`:''}
+      </div>`;
+    }).join('') : emptyRow('None yet')}
+    <button class="btn secondary" onclick="editRecurring(null)">+ Add recurring bill / EMI</button>
   `);
 }
-function editRecurring(){
+function editRecurring(id){
+  const r = id ? DATA.recurring.find(x=>x.id===id) : {id:null,name:'',amount:'',day:5,account:DATA.accounts[0]?.name||'',category:'Bills & Utilities',notes:''};
   openSheet(`
-    <div class="sheet-title">Add recurring payment</div>
-    <label>Name</label><input id="f_name" placeholder="e.g. Home Loan EMI">
-    <label>Amount (₹)</label><input id="f_amount" type="number">
-    <label>Day of month</label><input id="f_day" type="number" placeholder="e.g. 5">
-    <label>Account</label><select id="f_account">${DATA.accounts.map(a=>`<option>${a.name}</option>`).join('')}</select>
-    <button class="btn" onclick="saveRecurring()">Save</button>
+    <div class="sheet-title">${id?'Edit':'Add'} recurring bill / EMI</div>
+    <label>Name</label><input id="f_name" value="${r.name}" placeholder="e.g. Home Loan EMI, Broadband">
+    <label>Amount (₹)</label><input id="f_amount" type="number" value="${r.amount}">
+    <label>Day of month it's due</label><input id="f_day" type="number" min="1" max="31" value="${r.day}">
+    <label>Category</label>
+    <select id="f_category">${DATA.categories.expense.map(c=>`<option ${c===r.category?'selected':''}>${c}</option>`).join('')}</select>
+    <label>Paid from account</label><select id="f_account">${DATA.accounts.map(a=>`<option ${a.name===r.account?'selected':''}>${a.name}</option>`).join('')}</select>
+    <label>Notes (optional)</label><textarea id="f_notes" rows="2">${r.notes||''}</textarea>
+    <div class="btn-row">
+      ${id?`<button class="btn ghost" onclick="deleteRecurring('${id}')">Delete</button>`:''}
+      <button class="btn" onclick="saveRecurring('${id||''}')">Save</button>
+    </div>
+    ${id?`<button class="btn secondary" onclick="markRecurringPaid('${id}')">Mark this month as paid</button>`:''}
   `);
 }
-function saveRecurring(){
-  const rec={id:uid(), name:val('f_name'), amount:Number(val('f_amount')||0), day:Number(val('f_day')||1), account:val('f_account'), type:'EMI'};
-  DATA.recurring.push(rec); saveLocal(); closeSheet(); openRecurring();
+function saveRecurring(id){
+  const existing = id ? DATA.recurring.find(x=>x.id===id) : null;
+  const rec = {
+    id:id||uid(), name:val('f_name'), amount:Number(val('f_amount')||0), day:Number(val('f_day')||1),
+    category:val('f_category'), account:val('f_account'), notes:val('f_notes'),
+    lastPaid: existing ? existing.lastPaid : ''
+  };
+  if(existing){ Object.assign(existing, rec); } else { DATA.recurring.push(rec); }
+  saveLocal(); closeSheet(); openRecurring();
+  syncPush('Recurring', rec, !!id);
+}
+function deleteRecurring(id){
+  DATA.recurring = DATA.recurring.filter(x=>x.id!==id);
+  saveLocal(); closeSheet(); openRecurring();
+  syncDelete('recurring', id);
 }
 function openCategories(){
   openSheet(`
@@ -819,7 +956,7 @@ function closeSheet(){
 }
 
 /* ============ GOOGLE SHEETS SYNC ============ */
-const SHEET_MAP = {accounts:'Accounts', transactions:'Transactions', goals:'Goals', investments:'Investments', given:'GivenToOthers'};
+const SHEET_MAP = {accounts:'Accounts', transactions:'Transactions', goals:'Goals', investments:'Investments', given:'GivenToOthers', recurring:'Recurring'};
 
 function setSyncDot(state){
   const d = document.getElementById('syncDot');

@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Finance Tree</title>
+<style>
+  :root{
+    --green-deep:#1F6B47;
+    --green:#28965B;
+    --green-light:#E7F3EB;
+    --bg:#F6F7F4;
+    --card:#FFFFFF;
+    --ink:#1B2320;
+    --muted:#6B7A72;
+    --line:#E7EAE6;
+    --amber:#C98A2C;
+    --red:#C6493F;
+    --blue:#3B6FA6;
+    --radius:16px;
+    --shadow:0 1px 2px rgba(20,30,25,.04), 0 6px 20px rgba(20,30,25,.06);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{max-width:480px;margin:0 auto;min-height:100vh;background:var(--bg);position:relative;padding-bottom:78px;}
+
+  /* Header */
+  .topbar{
+    position:sticky;top:0;z-index:20;
+    background:var(--bg);
+    padding:16px 18px 8px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .brand{display:flex;align-items:center;gap:8px;}
+  .brand .leaf{font-size:20px;}
+  .brand-name{font-weight:800;letter-spacing:.2px;font-size:16px;}
+  .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);}
+  .sync-dot.ok{background:var(--green);}
+  .sync-dot.err{background:var(--red);}
+  .icon-btn{border:none;background:var(--card);width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);cursor:pointer;font-size:15px;}
+
+  .screen{padding:4px 18px 24px;}
+  h1.page-title{font-size:22px;font-weight:800;margin:6px 0 14px;letter-spacing:-.2px;}
+  .subtle{color:var(--muted);font-size:13px;}
+
+  /* Cards */
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:14px;}
+  .hero{background:linear-gradient(135deg,var(--green-deep),var(--green));color:#fff;border-radius:20px;padding:20px;margin-bottom:16px;box-shadow:var(--shadow);}
+  .hero .label{font-size:12px;opacity:.85;text-transform:uppercase;letter-spacing:.08em;}
+  .hero .amount{font-size:30px;font-weight:800;margin:6px 0 2px;}
+  .hero .delta{font-size:12px;opacity:.9;}
+
+  .row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);}
+  .row:last-child{border-bottom:none;}
+  .row .left{display:flex;align-items:center;gap:10px;min-width:0;}
+  .row .swatch{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+  .row .title{font-weight:600;font-size:14px;}
+  .row .meta{font-size:12px;color:var(--muted);}
+  .row .amt{font-weight:700;font-size:14px;white-space:nowrap;}
+  .amt.neg{color:var(--red);}
+  .amt.pos{color:var(--green-deep);}
+
+  .section-title{display:flex;align-items:center;justify-content:space-between;margin:18px 0 8px;}
+  .section-title h2{font-size:14px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0;}
+  .link-btn{border:none;background:none;color:var(--green-deep);font-weight:700;font-size:13px;cursor:pointer;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .stat{background:var(--card);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);}
+  .stat .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+  .stat .val{font-size:18px;font-weight:800;margin-top:2px;}
+
+  .pill{display:inline-block;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;}
+  .pill.green{background:var(--green-light);color:var(--green-deep);}
+  .pill.amber{background:#FBF0DD;color:var(--amber);}
+  .pill.red{background:#F8E4E1;color:var(--red);}
+  .pill.gray{background:#EEF0EE;color:var(--muted);}
+
+  .progress{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:8px;}
+  .progress > div{height:100%;background:linear-gradient(90deg,var(--green),var(--green-deep));border-radius:99px;}
+
+  .tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px;}
+  .tab-chip{border:1px solid var(--line);background:var(--card);padding:7px 14px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;color:var(--muted);}
+  .tab-chip.active{background:var(--green-deep);color:#fff;border-color:var(--green-deep);}
+
+  input,select,textarea{
+    width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);
+    background:#fff;font-size:14px;color:var(--ink);font-family:inherit;
+  }
+  label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:12px 0 5px;}
+  .btn{
+    width:100%;padding:13px;border-radius:12px;border:none;background:var(--green-deep);
+    color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-top:16px;
+  }
+  .btn.secondary{background:var(--green-light);color:var(--green-deep);}
+  .btn.ghost{background:none;border:1px solid var(--line);color:var(--ink);}
+  .btn-row{display:flex;gap:10px;}
+  .btn-row .btn{margin-top:16px;}
+
+  .fab{
+    position:fixed;left:50%;transform:translateX(-50%);bottom:70px;z-index:30;
+    max-width:480px;width:100%;display:flex;justify-content:center;pointer-events:none;
+  }
+  .fab button{
+    pointer-events:auto;width:56px;height:56px;border-radius:50%;border:none;
+    background:var(--green-deep);color:#fff;font-size:26px;box-shadow:0 8px 20px rgba(31,107,71,.35);cursor:pointer;
+  }
+
+  nav.bottom{
+    position:fixed;bottom:0;left:50%;transform:translateX(-50%);max-width:480px;width:100%;
+    background:var(--card);border-top:1px solid var(--line);display:flex;z-index:25;
+    padding:6px 4px 8px;
+  }
+  nav.bottom button{
+    flex:1;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:2px;
+    color:var(--muted);font-size:10px;font-weight:700;padding:6px 0;cursor:pointer;
+  }
+  nav.bottom button .ic{font-size:18px;}
+  nav.bottom button.active{color:var(--green-deep);}
+
+  .sheet-overlay{position:fixed;inset:0;background:rgba(20,30,25,.4);z-index:40;display:none;}
+  .sheet-overlay.open{display:block;}
+  .sheet{
+    position:fixed;left:50%;bottom:0;transform:translateX(-50%);max-width:480px;width:100%;
+    background:#fff;border-radius:20px 20px 0 0;z-index:41;padding:18px 18px 26px;
+    max-height:88vh;overflow-y:auto;display:none;
+  }
+  .sheet.open{display:block;}
+  .sheet-handle{width:40px;height:4px;background:var(--line);border-radius:99px;margin:0 auto 14px;}
+  .sheet-title{font-weight:800;font-size:17px;margin-bottom:4px;}
+  .seg{display:flex;background:var(--green-light);border-radius:12px;padding:4px;margin-top:10px;}
+  .seg button{flex:1;border:none;background:none;padding:9px;border-radius:9px;font-weight:700;font-size:13px;color:var(--green-deep);cursor:pointer;}
+  .seg button.active{background:var(--green-deep);color:#fff;}
+
+  .empty{text-align:center;padding:30px 10px;color:var(--muted);}
+  .empty .big{font-size:30px;margin-bottom:8px;}
+
+  .toast{
+    position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;
+    padding:10px 18px;border-radius:99px;font-size:13px;z-index:60;opacity:0;transition:opacity .25s;pointer-events:none;
+  }
+  .toast.show{opacity:1;}
+
+  a.plain{color:var(--green-deep);font-weight:700;text-decoration:none;}
+  .kv{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;}
+  .kv .k{color:var(--muted);}
+  .icon-x{position:absolute;top:16px;right:16px;background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="leaf">🌳</span><span class="brand-name">Finance Tree</span></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span id="syncDot" class="sync-dot" title="Not synced"></span>
+      <button class="icon-btn" onclick="go('more')">⚙️</button>
+    </div>
+  </div>
+
+  <div id="screen" class="screen"></div>
+</div>
+
+<div class="fab"><button onclick="openAddSheet()">+</button></div>
+
+<nav class="bottom">
+  <button data-tab="dashboard" onclick="go('dashboard')"><span class="ic">🏠</span>Home</button>
+  <button data-tab="transactions" onclick="go('transactions')"><span class="ic">💳</span>Transactions</button>
+  <button data-tab="goals" onclick="go('goals')"><span class="ic">🎯</span>Goals</button>
+  <button data-tab="investments" onclick="go('investments')"><span class="ic">📈</span>Invest</button>
+  <button data-tab="more" onclick="go('more')"><span class="ic">☰</span>More</button>
+</nav>
+
+<div class="sheet-overlay" id="overlay" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ DATA MODEL ============ */
+const rupee = n => '₹' + Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const todayISO = () => new Date().toISOString().slice(0,10);
+const uid = () => Date.now()+'-'+Math.floor(Math.random()*9999);
+
+const DEFAULT_CATEGORIES = {
+  expense:['Food & Groceries','Transport','Shopping','Bills & Utilities','Health','Entertainment','Education','EMI / Loan','Money Given to Others','Others'],
+  income:['Salary','Freelance / Business','Interest / Returns','Others']
+};
+
+function seedData(){
+  return {
+    accounts:[
+      {id:uid(), name:'SBI Bangalore (Salary)', bank:'SBI', purpose:'Salary & EMIs', balance:275430, notes:''},
+      {id:uid(), name:'SBI Kunigal (Savings)', bank:'SBI', purpose:'Goal savings', balance:181900, notes:''},
+      {id:uid(), name:'ICICI (Spending)', bank:'ICICI', purpose:'Daily spending', balance:56120, notes:''},
+      {id:uid(), name:'Cash in Hand', bank:'Cash', purpose:'Cash', balance:8000, notes:''}
+    ],
+    transactions:[],
+    goals:[
+      {id:uid(), name:'SBI Life Premium', monthly:13500, targetMonths:['Aug','Feb'], saved:0, account:'SBI Kunigal (Savings)', notes:'Half-yearly premium'},
+      {id:uid(), name:'School Fee', monthly:10000, targetMonths:['May'], saved:0, account:'SBI Kunigal (Savings)', notes:'Annual, due in May'},
+      {id:uid(), name:'Festival Fund', monthly:5000, targetMonths:['Oct'], saved:0, account:'SBI Kunigal (Savings)', notes:''},
+      {id:uid(), name:'Health Insurance', monthly:1900, targetMonths:['Jul'], saved:0, account:'SBI Kunigal (Savings)', notes:''}
+    ],
+    investments:[
+      {id:uid(), name:'Mutual Funds', type:'Mutual Fund', invested:325000, current:341250, notes:''},
+      {id:uid(), name:'PPF', type:'PPF', invested:210000, current:221000, notes:''},
+      {id:uid(), name:'Gold (Physical)', type:'Gold', invested:150000, current:157500, notes:'24.5g'}
+    ],
+    given:[],
+    recurring:[
+      {id:uid(), name:'Home Loan EMI', amount:0, day:5, account:'SBI Bangalore (Salary)', type:'EMI', notes:''}
+    ],
+    categories: DEFAULT_CATEGORIES,
+    settings:{scriptUrl:'', lastSync:''}
+  };
+}
+
+let DATA = seedData();
+let CURRENT_TAB='dashboard';
+
+/* ============ LOCAL PERSISTENCE (per-device cache; source of truth is Google Sheets) ============ */
+function saveLocal(){ try{ localStorage.setItem('financetree_data', JSON.stringify(DATA)); }catch(e){} }
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem('financetree_data');
+    if(raw){ const parsed = JSON.parse(raw); DATA = Object.assign(seedData(), parsed); }
+  }catch(e){}
+}
+loadLocal();
+
+/* ============ TOAST ============ */
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+/* ============ NAV ============ */
+function go(tab){
+  CURRENT_TAB = tab;
+  document.querySelectorAll('nav.bottom button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  render();
+}
+
+function render(){
+  const el = document.getElementById('screen');
+  if(CURRENT_TAB==='dashboard') el.innerHTML = viewDashboard();
+  else if(CURRENT_TAB==='accounts') el.innerHTML = viewAccounts();
+  else if(CURRENT_TAB==='transactions') el.innerHTML = viewTransactions();
+  else if(CURRENT_TAB==='goals') el.innerHTML = viewGoals();
+  else if(CURRENT_TAB==='investments') el.innerHTML = viewInvestments();
+  else if(CURRENT_TAB==='given') el.innerHTML = viewGiven();
+  else if(CURRENT_TAB==='more') el.innerHTML = viewMore();
+  window.scrollTo(0,0);
+}
+
+/* ============ CALCULATIONS ============ */
+function totalBalance(){ return DATA.accounts.reduce((s,a)=>s+Number(a.balance||0),0); }
+function totalInvested(){ return DATA.investments.reduce((s,i)=>s+Number(i.current||0),0); }
+function totalGiven(){ return DATA.given.filter(g=>g.status!=='Returned').reduce((s,g)=>s+Number(g.amount||0),0); }
+function totalGoalsSaved(){ return DATA.goals.reduce((s,g)=>s+Number(g.saved||0),0); }
+function netWorth(){ return totalBalance() + totalInvested(); }
+function monthKey(d){ return d.slice(0,7); }
+function thisMonthTx(type){
+  const m = todayISO().slice(0,7);
+  return DATA.transactions.filter(t=>t.date && t.date.slice(0,7)===m && t.type===type);
+}
+function sum(arr,f){ return arr.reduce((s,x)=>s+Number(f(x)||0),0); }
+
+/* ============ DASHBOARD ============ */
+function viewDashboard(){
+  const inc = sum(thisMonthTx('Income'), t=>t.amount);
+  const exp = sum(thisMonthTx('Expense'), t=>t.amount);
+  const recentTx = [...DATA.transactions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+
+  return `
+    <div class="hero">
+      <div class="label">Net Worth</div>
+      <div class="amount">${rupee(netWorth())}</div>
+      <div class="delta">Bank + cash: ${rupee(totalBalance())} · Investments: ${rupee(totalInvested())}</div>
+    </div>
+
+    <div class="grid2">
+      <div class="stat"><div class="label">This month income</div><div class="val" style="color:var(--green-deep)">${rupee(inc)}</div></div>
+      <div class="stat"><div class="label">This month expense</div><div class="val" style="color:var(--red)">${rupee(exp)}</div></div>
+      <div class="stat"><div class="label">Given to others</div><div class="val">${rupee(totalGiven())}</div></div>
+      <div class="stat"><div class="label">Saved toward goals</div><div class="val">${rupee(totalGoalsSaved())}</div></div>
+    </div>
+
+    <div class="section-title"><h2>Accounts</h2><button class="link-btn" onclick="go('accounts')">Manage</button></div>
+    <div class="card">
+      ${DATA.accounts.map(a=>`
+        <div class="row">
+          <div class="left"><div class="swatch" style="background:var(--green-light)">🏦</div>
+            <div><div class="title">${a.name}</div><div class="meta">${a.purpose}</div></div>
+          </div>
+          <div class="amt">${rupee(a.balance)}</div>
+        </div>`).join('') || emptyRow('No accounts yet')}
+    </div>
+
+    <div class="section-title"><h2>Recent activity</h2><button class="link-btn" onclick="go('transactions')">View all</button></div>
+    <div class="card">
+      ${recentTx.length? recentTx.map(txRow).join('') : emptyRow('No transactions yet — tap + to add one')}
+    </div>
+
+    <div class="section-title"><h2>Goals due soon</h2><button class="link-btn" onclick="go('goals')">View all</button></div>
+    <div class="card">
+      ${DATA.goals.length? DATA.goals.slice(0,3).map(g=>goalRow(g)).join('') : emptyRow('No goals yet')}
+    </div>
+  `;
+}
+function emptyRow(msg){ return `<div class="empty subtle">${msg}</div>`; }
+function txRow(t){
+  const neg = t.type==='Expense'||t.type==='Given';
+  return `<div class="row">
+    <div class="left"><div class="swatch" style="background:var(--green-light)">${categoryIcon(t.category)}</div>
+      <div><div class="title">${t.category||t.type}</div><div class="meta">${t.note||t.account||''} · ${fmtDate(t.date)}</div></div>
+    </div>
+    <div class="amt ${neg?'neg':'pos'}">${neg?'-':'+'}${rupee(t.amount)}</div>
+  </div>`;
+}
+function fmtDate(d){ if(!d) return ''; const parts=d.split('-'); return parts.length===3? `${parts[2]} ${monthNames[+parts[1]-1]}` : d; }
+function categoryIcon(cat){
+  const map={'Food & Groceries':'🍎','Transport':'🚌','Shopping':'🛍️','Bills & Utilities':'💡','Health':'❤️','Entertainment':'🎬','Education':'🎓','EMI / Loan':'🏦','Money Given to Others':'🤝','Salary':'💰','Freelance / Business':'💼','Interest / Returns':'📈'};
+  return map[cat]||'•';
+}
+function goalRow(g){
+  const pct = Math.min(100, Math.round((g.saved/(g.monthly*12||1))*100)) || Math.min(100, Math.round((g.saved / (g.targetAmount||g.monthly*targetMonthsFactor(g)))*100));
+  return `<div class="row" style="display:block;">
+    <div style="display:flex;justify-content:space-between;">
+      <div class="title">${g.name}</div>
+      <div class="meta">${g.targetMonths.join(', ')}</div>
+    </div>
+    <div class="meta">${rupee(g.saved)} saved of ${rupee(g.monthly)}/mo</div>
+    <div class="progress"><div style="width:${Math.min(100,pct)}%"></div></div>
+  </div>`;
+}
+function targetMonthsFactor(g){ return Math.max(1,g.targetMonths.length); }
+
+/* ============ ACCOUNTS ============ */
+function viewAccounts(){
+  return `
+    <h1 class="page-title">Accounts</h1>
+    <div class="card">
+      <div class="kv"><div class="k">Total balance</div><div>${rupee(totalBalance())}</div></div>
+    </div>
+    <div class="section-title"><h2>All accounts</h2></div>
+    <div class="card">
+      ${DATA.accounts.map(a=>`
+        <div class="row" onclick="editAccount('${a.id}')" style="cursor:pointer">
+          <div class="left"><div class="swatch" style="background:var(--green-light)">🏦</div>
+            <div><div class="title">${a.name}</div><div class="meta">${a.purpose}${a.notes? ' · '+a.notes:''}</div></div>
+          </div>
+          <div class="amt">${rupee(a.balance)}</div>
+        </div>`).join('')}
+    </div>
+    <button class="btn secondary" onclick="editAccount(null)">+ Add account or asset</button>
+  `;
+}
+function editAccount(id){
+  const a = id ? DATA.accounts.find(x=>x.id===id) : {id:null,name:'',bank:'',purpose:'',balance:'',notes:''};
+  openSheet(`
+    <div class="sheet-title">${id?'Edit':'Add'} account</div>
+    <label>Account / asset name</label><input id="f_name" value="${a.name}" placeholder="e.g. SBI Kunigal (Savings)">
+    <label>Bank / type</label><input id="f_bank" value="${a.bank}" placeholder="e.g. SBI, ICICI, Cash">
+    <label>Purpose</label><input id="f_purpose" value="${a.purpose}" placeholder="e.g. Goal savings, Spending">
+    <label>Current balance (₹)</label><input id="f_balance" type="number" value="${a.balance}">
+    <label>Notes (optional)</label><textarea id="f_notes" rows="2">${a.notes||''}</textarea>
+    <div class="btn-row">
+      ${id?`<button class="btn ghost" onclick="deleteItem('accounts','${id}')">Delete</button>`:''}
+      <button class="btn" onclick="saveAccount('${id||''}')">Save</button>
+    </div>
+  `);
+}
+function saveAccount(id){
+  const rec = {
+    id: id||uid(), name:val('f_name'), bank:val('f_bank'), purpose:val('f_purpose'),
+    balance:Number(val('f_balance')||0), notes:val('f_notes')
+  };
+  upsert('accounts', rec);
+  closeSheet(); go('accounts'); syncPush('Accounts', rec, !!id);
+}
+
+/* ============ TRANSACTIONS ============ */
+let txFilter='All';
+function viewTransactions(){
+  const list = [...DATA.transactions].filter(t=>txFilter==='All'||t.type===txFilter).sort((a,b)=>b.date.localeCompare(a.date));
+  return `
+    <h1 class="page-title">Transactions</h1>
+    <div class="tabs">
+      ${['All','Income','Expense','Transfer'].map(f=>`<div class="tab-chip ${txFilter===f?'active':''}" onclick="setTxFilter('${f}')">${f}</div>`).join('')}
+    </div>
+    <div class="card">
+      ${list.length? list.map(txRowEditable).join('') : emptyRow('No transactions yet')}
+    </div>
+    <button class="btn secondary" onclick="openAddSheet()">+ Add transaction</button>
+  `;
+}
+function setTxFilter(f){ txFilter=f; render(); }
+function txRowEditable(t){
+  const neg = t.type==='Expense';
+  return `<div class="row" onclick="editTransaction('${t.id}')" style="cursor:pointer">
+    <div class="left"><div class="swatch" style="background:var(--green-light)">${categoryIcon(t.category)}</div>
+      <div><div class="title">${t.category||t.type}</div><div class="meta">${t.note||''} ${t.account?('· '+t.account):''} · ${fmtDate(t.date)}</div></div>
+    </div>
+    <div class="amt ${neg?'neg':'pos'}">${neg?'-':'+'}${rupee(t.amount)}</div>
+  </div>`;
+}
+
+/* ============ ADD TRANSACTION SHEET ============ */
+let addType='Expense';
+function openAddSheet(prefill){
+  addType = (prefill && prefill.type) || 'Expense';
+  const cats = addType==='Income'? DATA.categories.income : DATA.categories.expense;
+  openSheet(`
+    <div class="sheet-title">Add transaction</div>
+    <div class="seg" id="typeSeg">
+      ${['Expense','Income','Transfer'].map(t=>`<button class="${addType===t?'active':''}" onclick="setAddType('${t}')">${t}</button>`).join('')}
+    </div>
+    <label>Amount (₹)</label><input id="f_amount" type="number" placeholder="0">
+    <label>Category</label>
+    <select id="f_category">${cats.map(c=>`<option>${c}</option>`).join('')}</select>
+    <label>Account</label>
+    <select id="f_account">${DATA.accounts.map(a=>`<option>${a.name}</option>`).join('')}</select>
+    <label>To whom / note (optional)</label><input id="f_note" placeholder="e.g. Ramesh, medical, groceries">
+    <label>Date</label><input id="f_date" type="date" value="${todayISO()}">
+    <button class="btn" onclick="saveTransaction()">Save transaction</button>
+  `);
+}
+function setAddType(t){ addType=t; openAddSheet({type:t}); }
+function editTransaction(id){
+  const t = DATA.transactions.find(x=>x.id===id);
+  addType=t.type;
+  const cats = addType==='Income'? DATA.categories.income : DATA.categories.expense;
+  openSheet(`
+    <div class="sheet-title">Edit transaction</div>
+    <label>Amount (₹)</label><input id="f_amount" type="number" value="${t.amount}">
+    <label>Category</label><select id="f_category">${cats.map(c=>`<option ${c===t.category?'selected':''}>${c}</option>`).join('')}</select>
+    <label>Account</label><select id="f_account">${DATA.accounts.map(a=>`<option ${a.name===t.account?'selected':''}>${a.name}</option>`).join('')}</select>
+    <label>To whom / note</label><input id="f_note" value="${t.note||''}">
+    <label>Date</label><input id="f_date" type="date" value="${t.date}">
+    <div class="btn-row">
+      <button class="btn ghost" onclick="deleteItem('transactions','${id}')">Delete</button>
+      <button class="btn" onclick="saveTransaction('${id}')">Save</button>
+    </div>
+  `);
+}
+function saveTransaction(id){
+  const amount = Number(val('f_amount')||0);
+  const rec = {
+    id:id||uid(), type:addType, amount, category:val('f_category'),
+    account:val('f_account'), note:val('f_note'), date:val('f_date')
+  };
+  const old = id ? DATA.transactions.find(x=>x.id===id) : null;
+  upsert('transactions', rec);
+  applyBalanceEffect(rec, old);
+  closeSheet(); go('transactions'); syncPush('Transactions', rec, !!id);
+}
+function applyBalanceEffect(rec, old){
+  // revert old effect
+  if(old){
+    const acc = DATA.accounts.find(a=>a.name===old.account);
+    if(acc){ acc.balance += (old.type==='Expense'? Number(old.amount): -Number(old.amount)); }
+  }
+  const acc = DATA.accounts.find(a=>a.name===rec.account);
+  if(acc){ acc.balance += (rec.type==='Expense'? -Number(rec.amount): Number(rec.amount)); }
+  saveLocal();
+}
+
+/* ============ GOALS ============ */
+function viewGoals(){
+  return `
+    <h1 class="page-title">Goals & Future Funds</h1>
+    <p class="subtle">Save a fixed amount every month into SBI Kunigal, then use it when it's due.</p>
+    <div class="card">
+      ${DATA.goals.length? DATA.goals.map(g=>`
+        <div class="row" style="display:block;cursor:pointer" onclick="editGoal('${g.id}')">
+          <div style="display:flex;justify-content:space-between;">
+            <div class="title">${g.name}</div>
+            <span class="pill green">${g.targetMonths.join(', ')}</span>
+          </div>
+          <div class="meta">${rupee(g.saved)} saved · ${rupee(g.monthly)}/month → ${g.account}</div>
+          ${g.notes?`<div class="meta">📝 ${g.notes}</div>`:''}
+          <div class="progress"><div style="width:${Math.min(100,Math.round((g.saved/(g.monthly*12))*100))}%"></div></div>
+        </div>`).join('') : emptyRow('No goals yet')}
+    </div>
+    <button class="btn secondary" onclick="editGoal(null)">+ Add goal</button>
+  `;
+}
+function editGoal(id){
+  const g = id? DATA.goals.find(x=>x.id===id) : {id:null,name:'',monthly:'',targetMonths:[],saved:0,account:DATA.accounts[1]?.name||'',notes:''};
+  openSheet(`
+    <div class="sheet-title">${id?'Edit':'Add'} goal</div>
+    <label>Goal name</label><input id="f_name" value="${g.name}" placeholder="e.g. SBI Premium, School Fee">
+    <label>Save this much every month (₹)</label><input id="f_monthly" type="number" value="${g.monthly}">
+    <label>Use / due month(s) — comma separated</label><input id="f_months" value="${g.targetMonths.join(', ')}" placeholder="e.g. Aug, Feb">
+    <label>Saved so far (₹)</label><input id="f_saved" type="number" value="${g.saved}">
+    <label>Savings account</label>
+    <select id="f_account">${DATA.accounts.map(a=>`<option ${a.name===g.account?'selected':''}>${a.name}</option>`).join('')}</select>
+    <label>Notes / comments</label><textarea id="f_notes" rows="2" placeholder="Anything you want to remember about this goal">${g.notes||''}</textarea>
+    <div class="btn-row">
+      ${id?`<button class="btn ghost" onclick="deleteItem('goals','${id}')">Delete</button>`:''}
+      <button class="btn" onclick="saveGoal('${id||''}')">Save</button>
+    </div>
+    ${id?`<button class="btn secondary" onclick="addGoalContribution('${id}')">+ Log this month's saving</button>`:''}
+  `);
+}
+function saveGoal(id){
+  const rec = {
+    id:id||uid(), name:val('f_name'), monthly:Number(val('f_monthly')||0),
+    targetMonths: val('f_months').split(',').map(s=>s.trim()).filter(Boolean),
+    saved:Number(val('f_saved')||0), account:val('f_account'), notes:val('f_notes')
+  };
+  upsert('goals', rec);
+  closeSheet(); go('goals'); syncPush('Goals', rec, !!id);
+}
+function addGoalContribution(id){
+  const g = DATA.goals.find(x=>x.id===id);
+  g.saved = Number(g.saved) + Number(g.monthly);
+  const acc = DATA.accounts.find(a=>a.name===g.account);
+  if(acc) acc.balance -= Number(g.monthly);
+  saveLocal(); closeSheet(); go('goals');
+  toast('Logged this month\'s saving for '+g.name);
+  syncPush('Goals', g, true);
+}
+
+/* ============ INVESTMENTS ============ */
+function viewInvestments(){
+  const invested = sum(DATA.investments, i=>i.invested);
+  const current = totalInvested();
+  const gain = current - invested;
+  return `
+    <h1 class="page-title">Investments & Assets</h1>
+    <div class="hero">
+      <div class="label">Current value</div>
+      <div class="amount">${rupee(current)}</div>
+      <div class="delta">Invested ${rupee(invested)} · ${gain>=0?'+':''}${rupee(gain)} (${invested?Math.round(gain/invested*1000)/10:0}%)</div>
+    </div>
+    <div class="card">
+      ${DATA.investments.length? DATA.investments.map(i=>`
+        <div class="row" style="cursor:pointer" onclick="editInvestment('${i.id}')">
+          <div class="left"><div class="swatch" style="background:var(--green-light)">${invIcon(i.type)}</div>
+            <div><div class="title">${i.name}</div><div class="meta">${i.type}${i.notes?(' · '+i.notes):''}</div></div>
+          </div>
+          <div style="text-align:right">
+            <div class="amt">${rupee(i.current)}</div>
+            <div class="meta" style="color:${i.current>=i.invested?'var(--green-deep)':'var(--red)'}">${i.current>=i.invested?'+':''}${rupee(i.current-i.invested)}</div>
+          </div>
+        </div>`).join('') : emptyRow('No investments yet')}
+    </div>
+    <button class="btn secondary" onclick="editInvestment(null)">+ Add investment / asset</button>
+  `;
+}
+function invIcon(t){ const m={'Mutual Fund':'📊','PPF':'🏦','Gold':'🟡','Shares':'📈','Fixed Deposit':'🧾','Real Estate':'🏠'}; return m[t]||'💠'; }
+function editInvestment(id){
+  const i = id? DATA.investments.find(x=>x.id===id) : {id:null,name:'',type:'Mutual Fund',invested:'',current:'',notes:''};
+  const types=['Mutual Fund','PPF','Gold','Shares','Fixed Deposit','Real Estate','Others'];
+  openSheet(`
+    <div class="sheet-title">${id?'Edit':'Add'} investment</div>
+    <label>Name</label><input id="f_name" value="${i.name}" placeholder="e.g. Mutual Funds, Gold, Zerodha Shares">
+    <label>Type</label><select id="f_type">${types.map(t=>`<option ${t===i.type?'selected':''}>${t}</option>`).join('')}</select>
+    <label>Amount invested (₹)</label><input id="f_invested" type="number" value="${i.invested}">
+    <label>Current value (₹)</label><input id="f_current" type="number" value="${i.current}">
+    <label>Notes (e.g. quantity, folio no., broker)</label><textarea id="f_notes" rows="2">${i.notes||''}</textarea>
+    <div class="btn-row">
+      ${id?`<button class="btn ghost" onclick="deleteItem('investments','${id}')">Delete</button>`:''}
+      <button class="btn" onclick="saveInvestment('${id||''}')">Save</button>
+    </div>
+  `);
+}
+function saveInvestment(id){
+  const rec = {id:id||uid(), name:val('f_name'), type:val('f_type'), invested:Number(val('f_invested')||0), current:Number(val('f_current')||0), notes:val('f_notes')};
+  upsert('investments', rec);
+  closeSheet(); go('investments'); syncPush('Investments', rec, !!id);
+}
+
+/* ============ GIVEN TO OTHERS ============ */
+function viewGiven(){
+  const pending = DATA.given.filter(g=>g.status!=='Returned');
+  const returned = DATA.given.filter(g=>g.status==='Returned');
+  return `
+    <h1 class="page-title">Money Given to Others</h1>
+    <div class="card"><div class="kv"><div class="k">Total outstanding</div><div>${rupee(totalGiven())}</div></div></div>
+    <div class="section-title"><h2>Pending</h2></div>
+    <div class="card">${pending.length? pending.map(givenRow).join('') : emptyRow('Nothing pending')}</div>
+    ${returned.length?`<div class="section-title"><h2>Returned</h2></div><div class="card">${returned.map(givenRow).join('')}</div>`:''}
+    <button class="btn secondary" onclick="editGiven(null)">+ Add entry</button>
+  `;
+}
+function givenRow(g){
+  return `<div class="row" style="cursor:pointer" onclick="editGiven('${g.id}')">
+    <div class="left"><div class="swatch" style="background:var(--green-light)">🤝</div>
+      <div><div class="title">${g.person}</div><div class="meta">${g.reason||''} · ${fmtDate(g.date)}</div></div>
+    </div>
+    <div style="text-align:right">
+      <div class="amt">${rupee(g.amount)}</div>
+      <span class="pill ${g.status==='Returned'?'green':'amber'}">${g.status||'Pending'}</span>
+    </div>
+  </div>`;
+}
+function editGiven(id){
+  const g = id? DATA.given.find(x=>x.id===id) : {id:null,person:'',amount:'',date:todayISO(),reason:'',status:'Pending',notes:''};
+  openSheet(`
+    <div class="sheet-title">${id?'Edit':'Add'} entry</div>
+    <label>Given to (name)</label><input id="f_person" value="${g.person}" placeholder="e.g. Ramesh">
+    <label>Amount (₹)</label><input id="f_amount" type="number" value="${g.amount}">
+    <label>Date</label><input id="f_date" type="date" value="${g.date}">
+    <label>Reason (optional)</label><input id="f_reason" value="${g.reason||''}" placeholder="e.g. medical, personal loan">
+    <label>Status</label>
+    <select id="f_status"><option ${g.status==='Pending'?'selected':''}>Pending</option><option ${g.status==='Returned'?'selected':''}>Returned</option></select>
+    <label>Notes</label><textarea id="f_notes" rows="2">${g.notes||''}</textarea>
+    <div class="btn-row">
+      ${id?`<button class="btn ghost" onclick="deleteItem('given','${id}')">Delete</button>`:''}
+      <button class="btn" onclick="saveGiven('${id||''}')">Save</button>
+    </div>
+  `);
+}
+function saveGiven(id){
+  const rec = {id:id||uid(), person:val('f_person'), amount:Number(val('f_amount')||0), date:val('f_date'), reason:val('f_reason'), status:val('f_status'), notes:val('f_notes')};
+  upsert('given', rec);
+  closeSheet(); go('given'); syncPush('GivenToOthers', rec, !!id);
+}
+
+/* ============ MORE / SETTINGS ============ */
+function viewMore(){
+  return `
+    <h1 class="page-title">More</h1>
+    <div class="section-title"><h2>Tools</h2></div>
+    <div class="card">
+      <div class="row" style="cursor:pointer" onclick="go('given')"><div class="left"><div class="swatch" style="background:var(--green-light)">🤝</div><div class="title">Money Given to Others</div></div><span>›</span></div>
+      <div class="row" style="cursor:pointer" onclick="go('accounts')"><div class="left"><div class="swatch" style="background:var(--green-light)">🏦</div><div class="title">Accounts & Assets</div></div><span>›</span></div>
+      <div class="row" style="cursor:pointer" onclick="openRecurring()"><div class="left"><div class="swatch" style="background:var(--green-light)">🔁</div><div class="title">Recurring / EMIs</div></div><span>›</span></div>
+      <div class="row" style="cursor:pointer" onclick="openCategories()"><div class="left"><div class="swatch" style="background:var(--green-light)">🏷️</div><div class="title">Categories</div></div><span>›</span></div>
+      <div class="row" style="cursor:pointer" onclick="openReports()"><div class="left"><div class="swatch" style="background:var(--green-light)">📊</div><div class="title">Reports</div></div><span>›</span></div>
+    </div>
+    <div class="section-title"><h2>Google Sheets sync</h2></div>
+    <div class="card">
+      <p class="subtle" style="margin-top:0">Paste your Apps Script Web App URL to sync all data to your own Google Sheet in real time.</p>
+      <input id="f_scripturl" value="${DATA.settings.scriptUrl||''}" placeholder="https://script.google.com/macros/s/.../exec">
+      <div class="btn-row">
+        <button class="btn ghost" onclick="saveScriptUrl()">Save URL</button>
+        <button class="btn" onclick="fullSync()">Sync now</button>
+      </div>
+      <p class="subtle">Last synced: ${DATA.settings.lastSync||'never'}</p>
+    </div>
+    <div class="section-title"><h2>Data</h2></div>
+    <div class="card">
+      <button class="btn ghost" onclick="exportJSON()">Export backup (.json)</button>
+    </div>
+  `;
+}
+function openRecurring(){
+  openSheet(`
+    <div class="sheet-title">Recurring payments / EMIs</div>
+    <p class="subtle">Track loan EMIs and other fixed monthly payments here as a reminder — log them as an Expense transaction when paid.</p>
+    ${DATA.recurring.map(r=>`
+      <div class="row"><div class="left"><div class="swatch" style="background:var(--green-light)">🔁</div>
+        <div><div class="title">${r.name}</div><div class="meta">Day ${r.day} of month · ${r.account}</div></div></div>
+        <div class="amt">${rupee(r.amount)}</div>
+      </div>`).join('') || emptyRow('None yet')}
+    <button class="btn secondary" onclick="editRecurring()">+ Add recurring payment</button>
+  `);
+}
+function editRecurring(){
+  openSheet(`
+    <div class="sheet-title">Add recurring payment</div>
+    <label>Name</label><input id="f_name" placeholder="e.g. Home Loan EMI">
+    <label>Amount (₹)</label><input id="f_amount" type="number">
+    <label>Day of month</label><input id="f_day" type="number" placeholder="e.g. 5">
+    <label>Account</label><select id="f_account">${DATA.accounts.map(a=>`<option>${a.name}</option>`).join('')}</select>
+    <button class="btn" onclick="saveRecurring()">Save</button>
+  `);
+}
+function saveRecurring(){
+  const rec={id:uid(), name:val('f_name'), amount:Number(val('f_amount')||0), day:Number(val('f_day')||1), account:val('f_account'), type:'EMI'};
+  DATA.recurring.push(rec); saveLocal(); closeSheet(); openRecurring();
+}
+function openCategories(){
+  openSheet(`
+    <div class="sheet-title">Categories</div>
+    <label>Expense categories</label>
+    <div class="card">${DATA.categories.expense.map(c=>`<span class="pill gray" style="margin:3px">${c}</span>`).join('')}</div>
+    <label>Income categories</label>
+    <div class="card">${DATA.categories.income.map(c=>`<span class="pill gray" style="margin:3px">${c}</span>`).join('')}</div>
+    <label>Add a category</label>
+    <select id="f_cattype"><option value="expense">Expense</option><option value="income">Income</option></select>
+    <input id="f_catname" placeholder="Category name" style="margin-top:8px">
+    <button class="btn" onclick="addCategory()">Add category</button>
+  `);
+}
+function addCategory(){
+  const t=val('f_cattype'), n=val('f_catname');
+  if(n){ DATA.categories[t].push(n); saveLocal(); }
+  closeSheet(); openCategories();
+}
+function openReports(){
+  const exp = DATA.transactions.filter(t=>t.type==='Expense');
+  const byCat = {};
+  exp.forEach(t=>byCat[t.category]=(byCat[t.category]||0)+Number(t.amount));
+  const total = sum(exp, t=>t.amount) || 1;
+  const rows = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  openSheet(`
+    <div class="sheet-title">Spending by category (all time)</div>
+    ${rows.length? rows.map(([c,amt])=>`
+      <div class="row" style="display:block">
+        <div style="display:flex;justify-content:space-between"><span>${categoryIcon(c)} ${c}</span><span>${rupee(amt)}</span></div>
+        <div class="progress"><div style="width:${Math.round(amt/total*100)}%"></div></div>
+      </div>`).join('') : emptyRow('No expenses logged yet')}
+  `);
+}
+function saveScriptUrl(){
+  DATA.settings.scriptUrl = val('f_scripturl');
+  saveLocal(); toast('Saved. Tap "Sync now" to connect.');
+}
+function exportJSON(){
+  const blob = new Blob([JSON.stringify(DATA,null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='financetree-backup.json'; a.click();
+}
+
+/* ============ GENERIC HELPERS ============ */
+function val(id){ const e=document.getElementById(id); return e? e.value : ''; }
+function upsert(collection, rec){
+  const list = DATA[collection];
+  const i = list.findIndex(x=>x.id===rec.id);
+  if(i>=0) list[i]=rec; else list.push(rec);
+  saveLocal();
+}
+function deleteItem(collection, id){
+  DATA[collection] = DATA[collection].filter(x=>x.id!==id);
+  saveLocal(); closeSheet(); render();
+  syncDelete(collection, id);
+}
+
+/* ============ SHEET (bottom modal) ============ */
+function openSheet(html){
+  document.getElementById('sheet').innerHTML = `<div class="sheet-handle"></div><button class="icon-x" onclick="closeSheet()">✕</button>${html}`;
+  document.getElementById('sheet').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
+function closeSheet(){
+  document.getElementById('sheet').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+/* ============ GOOGLE SHEETS SYNC ============ */
+const SHEET_MAP = {accounts:'Accounts', transactions:'Transactions', goals:'Goals', investments:'Investments', given:'GivenToOthers'};
+
+function setSyncDot(state){
+  const d = document.getElementById('syncDot');
+  d.classList.remove('ok','err');
+  if(state==='ok') d.classList.add('ok');
+  if(state==='err') d.classList.add('err');
+}
+
+function serializeForSheet(data){
+  const out = {};
+  Object.entries(data).forEach(([k,v])=>{ out[k] = Array.isArray(v) ? v.join(', ') : v; });
+  return out;
+}
+function deserializeGoal(row){
+  if(row && typeof row.targetMonths === 'string'){
+    row.targetMonths = row.targetMonths.split(',').map(s=>s.trim()).filter(Boolean);
+  }
+  return row;
+}
+
+async function syncPush(sheetName, data, isUpdate){
+  const url = DATA.settings.scriptUrl;
+  if(!url) return;
+  try{
+    await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({sheet:sheetName, action:'upsert', data: serializeForSheet(data)})
+    });
+    setSyncDot('ok');
+  }catch(e){ setSyncDot('err'); }
+}
+async function syncDelete(collection, id){
+  const url = DATA.settings.scriptUrl;
+  const sheetName = SHEET_MAP[collection];
+  if(!url || !sheetName) return;
+  try{
+    await fetch(url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({sheet:sheetName, action:'delete', data:{id}})});
+    setSyncDot('ok');
+  }catch(e){ setSyncDot('err'); }
+}
+async function fullSync(){
+  const url = val('f_scripturl') || DATA.settings.scriptUrl;
+  if(!url){ toast('Paste your Apps Script URL first'); return; }
+  DATA.settings.scriptUrl = url; saveLocal();
+  toast('Syncing…');
+  try{
+    // Push everything up
+    for(const [key, sheetName] of Object.entries(SHEET_MAP)){
+      for(const rec of DATA[key]){
+        await fetch(url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({sheet:sheetName, action:'upsert', data:serializeForSheet(rec)})});
+      }
+    }
+    // Pull latest back down
+    const res = await fetch(url);
+    const remote = await res.json();
+    Object.entries(SHEET_MAP).forEach(([key,sheetName])=>{
+      if(remote[sheetName]) DATA[key] = key==='goals' ? remote[sheetName].map(deserializeGoal) : remote[sheetName];
+    });
+    DATA.settings.lastSync = new Date().toLocaleString('en-IN');
+    saveLocal(); setSyncDot('ok'); toast('Synced with Google Sheets');
+    render();
+  }catch(e){
+    setSyncDot('err'); toast('Sync failed — check the URL and try again');
+  }
+}
+async function autoPull(){
+  const url = DATA.settings.scriptUrl;
+  if(!url) return;
+  try{
+    const res = await fetch(url);
+    const remote = await res.json();
+    Object.entries(SHEET_MAP).forEach(([key,sheetName])=>{
+      if(remote[sheetName] && remote[sheetName].length) DATA[key] = key==='goals' ? remote[sheetName].map(deserializeGoal) : remote[sheetName];
+    });
+    saveLocal(); setSyncDot('ok'); render();
+  }catch(e){ setSyncDot('err'); }
+}
+
+/* ============ INIT ============ */
+go('dashboard');
+if(DATA.settings.scriptUrl) autoPull();
+</script>
+</body>
+</html>
